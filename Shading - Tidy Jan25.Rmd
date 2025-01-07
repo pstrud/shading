@@ -1,0 +1,1155 @@
+---
+title: "Paige Strudwick - Assessing protective shading of coral nurseries during a mass bleaching event on the Great Barrier Reef - Notebook"
+output: html_notebook
+---
+
+```{r, GENERAL library}
+library(rlang)
+library(tidyverse) # for data tidying 
+library(ggplot2)   # for data visualisation (make plot)
+library(ggforce)
+library(readr)
+#library(phyloseq)  # phylogeny analysis, lot of handy function
+library(vegan)     # to do permanova
+library(permute)
+library(lattice)
+library(gridExtra)
+library(taxa)
+library(dplyr)
+library(readr)
+library(stringr)
+library(agricolae)
+library(ape)
+library(tidyr)
+library(ggpubr)
+library(ARTool)
+library(rstatix)
+library(car)
+
+```
+
+```{r}
+setwd("/Users/154800/Library/CloudStorage/OneDrive-UTS/2. Shading Nurseries")
+shade <- read_csv("shade.csv", col_types = cols(time = col_character(), days = col_character(), genotype = col_character(), morph = col_character(), `MIG` = col_number(), stdev = col_number()))
+# Filter the data - remove p.bushy
+shade <- shade %>%
+  filter(morph != "p.bushy")
+```
+
+## Mean Intensity Grey
+```{r, Fig S6 - Mean Intensity Grey for coral fragments over time at BL and LB}
+# Convert treatment to a factor with levels for better plotting
+shade$treatment <- factor(shade$treatment, levels = c("CONTROL", "SHADED", "DEEP","SHADE-DEEP"))
+
+shade$genotype <- factor(shade$genotype, levels = c("genotype", "1","2","3","4","5","6","7","8","9","10","11","12"))
+
+###group by treatment
+std <- function(x) sd(x)/sqrt(length(x))
+# Remove rows with NA in MIG column
+shade2 <- shade[!is.na(shade$MIG), ]
+###calculate stderror and dev for grouping by treatment
+data_plot_line <- shade2 %>% group_by(treatment, site, time) %>% summarise(Avg = mean(MIG), Stdev = sd(MIG), SEM = std(MIG)) 
+
+treatment_plot1 <- ggplot(data_plot_line, aes(x = time, y = Avg, colour = treatment, linetype = treatment, group = interaction(treatment))) +
+  geom_line(stat = "identity", size = 1) +
+  geom_errorbar(aes(x=time, ymin = Avg-SEM, ymax=Avg+SEM), width=0.25,linetype = "solid") +
+  facet_wrap(~site, nrow = 1, ncol = 2) +
+  labs(x = "Timepoint", y = "Mean Intensity Grey (%)", color = "Site", linetype = "Treatment") +
+  theme_minimal() +
+  scale_y_continuous(limits = c(0, 100)) +
+  scale_linetype_manual(values = c("CONTROL" = "solid", "DEEP" = "dotdash", "SHADE-DEEP" = "longdash", "SHADED" = "dotted")) +
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", size = 1, fill = NA),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black")
+  )
+
+treatment_plot1
+
+```
+
+```{r, Line plots and calculations of difference from T0 for all corals over time at both sites}
+
+library(dplyr)
+##calculate relative change
+shade4 <- shade %>%
+  group_by(site, treatment) %>%
+  mutate(diff_from_0 = MIG[time == 0]-MIG)
+##calculate standard error for grouped by morph
+###group by morph
+std <- function(x) sd(x)/sqrt(length(x))
+# Remove rows with NA in MIG column
+shade5 <- shade4[!is.na(shade4$MIG), ]
+###calculate stderror and dev for grouping by morph
+data_plot_line2 <- shade5 %>% group_by(treatment, site, time) %>% summarise(Avg = mean(diff_from_0), Stdev = sd(diff_from_0), SEM = std(diff_from_0))
+### plot difference from T0
+morph_plot3 <- ggplot(data_plot_line2, aes(x = time, y = Avg, color = treatment, group = interaction(site, treatment))) +
+  geom_line(stat = "identity", size = 1) +
+  geom_errorbar(aes(x = time, ymin = Avg - SEM, ymax = Avg + SEM), width = 0.25, linetype = "solid") +
+  geom_hline(yintercept = 0, linetype = "dashed") +  # Add dashed line at y = 0
+  facet_wrap( ~ site, nrow = 2, ncol = 1) +
+  labs(x = "Timepoint", y = "Diff from T0 Mean Intensity Grey (%)", color = "Site", linetype = "Treatment") +
+  theme_minimal() +
+  scale_linetype_manual(values = c("CONTROL" = "solid", "DEEP" = "dotdash", "SHADE-DEEP" = "longdash", "SHADED" = "dotted")) +
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", size = 1, fill = NA),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black")
+  )
+
+morph_plot3
+### plot difference from T0
+morph_plot4 <- ggplot(data_plot_line2, aes(x = time, y = Avg, color = treatment, group = interaction(site, treatment))) +
+  geom_line(stat = "identity", size = 1) +
+  geom_errorbar(aes(x = time, ymin = Avg - SEM, ymax = Avg + SEM), width = 0.25, linetype = "solid") +
+  geom_hline(yintercept = 0, linetype = "dashed") +  # Add dashed line at y = 0
+  facet_wrap(~ treatment, nrow = 2, ncol = 2) +
+  labs(x = "Timepoint", y = "Diff from T0 Mean Intensity Grey (%)", color = "Site", linetype = "Treatment") +
+  theme_minimal() +
+  scale_linetype_manual(values = c("CONTROL" = "solid", "DEEP" = "dotdash", "SHADE-DEEP" = "longdash", "SHADED" = "dotted")) +
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", size = 1, fill = NA),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black")
+  )
+
+morph_plot4
+
+```
+## Bar Plot MIG
+```{r, Fig 2c Barplot of mean MIG from T3-T6}
+library(dplyr)
+library(ggplot2)
+# Define standard error function
+std <- function(x) sd(x) / sqrt(length(x))
+# Group by treatment and site, then calculate the mean and standard error across all time points
+data_plot_bar <- shade5 %>%
+  group_by(treatment, site) %>%
+  summarise(
+    Avg = mean(MIG, na.rm = TRUE),
+    SEM = std(MIG)
+  )
+shade_time3to6 <- shade2 %>% filter(time %in% c(3, 4, 5,6))
+na.omit(shade_time3to6)
+##to do just  time point 3-6 when structures were installed
+data_plot_bar <- shade_time3to6 %>%
+  group_by(treatment,site) %>%
+  summarise(
+    Avg = mean(MIG, na.rm = TRUE),
+    SEM = std(MIG)
+  )
+
+# Plot the bar graph
+morph_plot_bar <- ggplot(data_plot_bar, aes(x = treatment, y = Avg, fill = site)) +
+  geom_bar(stat = "identity", position = position_dodge(), color = "black", size = 0.5) +
+  geom_errorbar(aes(ymin = Avg - SEM, ymax = Avg + SEM), 
+                position = position_dodge(0.9), width = 0.25, color = "black") +
+  labs(x = "Treatment", y = "Mean Intensity Grey (%)", fill = "Site") +
+  theme_minimal() +
+  #scale_fill_manual(values = c("CONTROL" = "grey50", "DEEP" = "dodgerblue3", "SHADE-DEEP" = "green3", "SHADED" = "orangered3")) +
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", size = 1, fill = NA),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black")
+  )
+
+morph_plot_bar
+
+```
+
+```{r, Calculate overall MIG at each site from T3-T6}
+library(dplyr)
+library(ggplot2)
+# Define standard error function
+std <- function(x) sd(x) / sqrt(length(x))
+# Group by treatment and site, then calculate the mean and standard error across all time points
+##to do just  time point 3-6 when structures were installed
+data_plot_bar <- shade_time3to6 %>%
+  group_by(site) %>%
+  summarise(
+    Avg = mean(MIG, na.rm = TRUE),
+    SEM = std(MIG)
+  )
+##to do all timepoints
+data_plot_bar <- shade5 %>%
+  group_by(site) %>%
+  summarise(
+    Avg = mean(MIG, na.rm = TRUE),
+    SEM = std(MIG)
+  )
+```
+## MIG Bar Plot by Treatment
+
+```{r, Fig 2a-b. ALL calculate difference from T0 for MIG}
+library(dplyr)
+std <- function(x) sd(x)/sqrt(length(x))
+# Remove rows with NA in MIG column
+shade5 <- shade4[!is.na(shade4$diff_from_0), ]
+###calculate stderror and dev for grouping treatment and site
+data_plot_line2 <- shade5 %>% group_by(treatment, site,time) %>% summarise(Avg = mean(diff_from_0), Stdev = sd(diff_from_0), SEM = std(diff_from_0))
+### plot difference from T0
+treat_plot3 <- ggplot(data_plot_line2, aes(x = time, y = Avg, color = treatment, group = interaction(site, treatment))) +
+  geom_line(stat = "identity", size = 1) +
+  geom_errorbar(aes(x = time, ymin = Avg - SEM, ymax = Avg + SEM), width = 0.25, linetype = "solid") +
+  geom_hline(yintercept = 0, linetype = "dashed") +  # Add dashed line at y = 0
+  facet_wrap( ~ site, nrow = 2, ncol = 1) +
+  labs(x = "Timepoint", y = "Diff from T0 Mean Intensity Grey (%)", color = "Site", linetype = "Treatment") +
+  theme_minimal() +
+  scale_linetype_manual(values = c("CONTROL" = "solid", "DEEP" = "dotdash", "SHADE-DEEP" = "longdash", "SHADED" = "dotted")) +
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", size = 1, fill = NA),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black")
+  )
+
+treat_plot3
+
+```
+
+## Statistics
+*Normality and homogeneity of variance check for difference from T0 values*
+```{r, ALL}
+shade2 <- shade %>%
+  group_by(site, genotype, treatment) %>%
+  mutate(diff_from_0 = MIG[time == 0]-MIG)
+
+model  <- lm(diff_from_0 ~ site*treatment, data = shade2)
+ggqqplot(residuals(model))
+#ggsave("plots/qqplots/Tissue_18_SQRT/Sulphur_elements_ngcm2.png", height = 3, width = 5)
+shapiro_test(residuals(model))
+library(rstatix)
+
+shade2$site <- as.factor(shade2$site)
+leveneTest(diff_from_0 ~ interaction(site, treatment), data = shade2)
+```
+*Global tests*
+```{r, non-parametric for all Longbommie & Blue Lagoon}
+
+long2 <- shade2 %>% filter(site == "LONG")
+
+long2$site = as.factor(long2$site)
+long2$treatment = as.factor(long2$treatment)
+long2$time = as.factor(long2$time)
+long2$morph = as.factor(long2$morph)
+long2$fragment_id = as.factor(long2$fragment_id)
+long2_naomit <- na.omit(long2)
+longallaov = art(MIG ~ morph*treatment+ Error(fragment_id), data= long2_naomit)
+anova(longallaov)
+
+art.con(longallaov, "morph", adjust="holm") %>%  # run ART-C for X1 × X2
+		  summary() %>%  # add significance stars to the output
+		  mutate(sig. = symnum(p.value, corr=FALSE, na=FALSE,
+		                       cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1),
+		                       symbols = c("***", "**", "*", ".", " ")))
+
+
+```
+
+```{r, Supplementary Data Sheet 4 part a nonparametric for all time points pooled for MIG and diff from T0}
+shade4$site = as.factor(shade4$site)
+shade4$treatment = as.factor(shade4$treatment)
+shade4$time = as.factor(shade4$time)
+shade4$fragment_id = as.factor(shade4$fragment_id)
+shade4$morph = as.factor(shade4$morph)
+shade4_naomit <- na.omit(shade4)
+MIGallaov = art(MIG ~ site * treatment+ Error(fragment_id), data= shade4_naomit)
+anova(MIGallaov)
+
+
+difffromT0allaov = art(diff_from_0 ~ site * treatment+ Error(fragment_id), data= shade4_naomit)
+anova(difffromT0allaov)
+
+art.con(difffromT0allaov, "site:treatment", adjust="holm") %>%  # run ART-C for X1 × X2
+		  summary() %>%  # add significance stars to the output
+		  mutate(sig. = symnum(p.value, corr=FALSE, na=FALSE,
+		                       cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1),
+		                       symbols = c("***", "**", "*", ".", " ")))
+```
+
+```{r, Supplementary Data Sheet 4 part b nonparametric for all T3-T6 diff from T0}
+shade_time3to6 <- shade4 %>% filter(time %in% c(3,4,5,6))
+
+shade_time3to6$site = as.factor(shade_time3to6$site)
+shade_time3to6$treatment = as.factor(shade_time3to6$treatment)
+shade_time3to6$time = as.factor(shade_time3to6$time)
+shade_time3to6$fragment_id = as.factor(shade_time3to6$fragment_id)
+shade_time3to6$morph = as.factor(shade_time3to6$morph)
+shade_time3to6_naomit <- na.omit(shade_time3to6)
+allaov = art(diff_from_0 ~ site * treatment+ Error(fragment_id), data= shade_time3to6_naomit)
+anova(allaov)
+
+art.con(allaov, "site:treatment", adjust="holm") %>%  # run ART-C for X1 × X2
+		  summary() %>%  # add significance stars to the output
+		  mutate(sig. = symnum(p.value, corr=FALSE, na=FALSE,
+		                       cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1),
+		                       symbols = c("***", "**", "*", ".", " ")))
+```
+
+##Kaplan-Meier Survival Analysis
+
+```{r,KM survival analysis, EXAMPLE}
+setwd("~/Library/CloudStorage/OneDrive-UTS/2. Shading Nurseries")
+library(survival)
+library(ranger)
+library(ggplot2)
+library(dplyr)
+library(ggfortify)
+###example data you can check yours looks like this when you load it
+data(veteran)
+head(veteran)
+
+km <- with(veteran, Surv(time, status))
+head(km,80)
+
+km_fit <- survfit(Surv(time, status) ~ 1, data=veteran)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+
+#autoplot(km_fit)
+
+km_trt_fit <- survfit(Surv(time, status) ~ trt, data=veteran)
+#autoplot(km_trt_fit)
+```
+
+```{r, Kaplan Meier between sites}
+KM_survivalanalysis <- read_csv("/Users/154800/Library/CloudStorage/OneDrive-UTS/2. Shading Nurseries/km_survivalanalysis_T3.csv")
+# Filter the data - remove p.bushy
+KM_survivalanalysis <- KM_survivalanalysis %>%
+  filter(morph != "p.bushy")
+
+km <- with(KM_survivalanalysis, Surv(time, status))
+head(km,80)
+##fit the data
+km_fit <- survfit(Surv(time, status) ~ 1, data=KM_survivalanalysis)
+summary(km_fit, times = c(1,58,80,94,100,123,149*(1:10)))
+##basic plot
+#autoplot(km_fit)
+
+km_trt_fit <- survfit(Surv(days, status) ~ site, data=KM_survivalanalysis)
+summary(km_trt_fit, times = c(1,58,80,94,100,123,149*(1:10)))
+#autoplot(km_trt_fit)
+
+
+###plots
+library(survminer)
+library(survival)
+ggsurvplot(km_trt_fit, data = KM_survivalanalysis)
+
+
+theme <- theme(axis.line = element_line(colour = "black"),
+           panel.grid.major = element_line(colour = "white"),
+           panel.grid.minor = element_line(colour = "white"),
+           panel.border = element_blank(),
+           panel.background = element_blank())
+
+
+ggsurv <- ggsurvplot(km_trt_fit, data = KM_survivalanalysis,
+ surv.median.line = "hv", # Add medians survival
+ ncensor.plot = TRUE,
+ risk.table = FALSE,
+ legend.title = "Site",
+ legend.labs = c("LONG", "BLUE"),
+  palette = c("#eb4034","#4a7394"),
+ # Add p-value and intervals
+ pval = TRUE,
+ title = "A",
+ xlim = c(0,150),
+ xlab = "Time (Days)",
+ ylab = "Survival Probability",# customize X axis label.
+           break.time.by = 50, 
+ ylim = c(0.4,1),
+ conf.int = TRUE,
+ tables.height = 0.4,
+# tables.theme = theme_cleantable(),
+# ggtheme = theme_bw(),
+ tables.theme = theme,
+ ggtheme = theme
+)
+ggsurv
+
+ggsurv$ncensor.plot <- ggsurv$ncensor.plot + 
+  #scale_y_continuous(breaks = c(0,20,40,60,80,100,120)) + 
+  scale_x_continuous(breaks = c(0,50,100,150), limits = c(0,150))+
+  labs(title="B",
+        x ="Time (Days)", y = "Fragment Mortality")
+
+ggsurv
+
+
+ggsurv_alone <- ggsurvplot(km_trt_fit, data = KM_survivalanalysis,
+ surv.median.line = "hv", # Add medians survival
+ ncensor.plot = FALSE,
+ risk.table = FALSE,
+ legend.title = "Site",
+ legend.labs = c("LONG", "BLUE"),
+  palette = c("#eb4034","#4a7394"),
+ # Add p-value and intervals
+ pval = TRUE,
+ title = "A",
+ xlim = c(0,150),
+ xlab = "Time (Days)",
+ ylab = "Survival Probability",# customize X axis label.
+           break.time.by = 50, 
+ ylim = c(0.4,1),
+ conf.int = TRUE,
+ tables.height = 0.4,
+# tables.theme = theme_cleantable(),
+# ggtheme = theme_bw(),
+ tables.theme = theme,
+ ggtheme = theme
+)
+ggsurv_alone
+```
+
+```{r, Plot Fig S5a and stats log rank test of survival curves}
+# Pairwise survdiff -- tp statistically compare survival curves
+library(survminer)
+res1 <- survdiff(Surv(time, status) ~ site ,
+     data = KM_survivalanalysis)
+res1
+##if null hypoth is rejected from above results - can go on to do pairwise comp
+res <- pairwise_survdiff(Surv(days, status) ~ site , p.adjust.method = "BH",
+     data = KM_survivalanalysis)
+res
+library(survMisc)
+res <- ten(Surv(time, status) ~ site,
+     data = KM_survivalanalysis)
+res
+##different plots
+survminer::ggsurvplot(km_trt_fit)
+survminer::ggsurvplot(km_trt_fit, conf.int = TRUE)
+```
+
+```{r, Fig S5b - KM curves within sites between treatments BLUE, T3-T6 only }
+KM_survivalanalysis <- read_csv("/Users/154800/Library/CloudStorage/OneDrive-UTS/2. Shading Nurseries/km_survivalanalysis_T3.csv")
+# Filter the data - remove p.bushy
+KM_survivalanalysis <- KM_survivalanalysis %>%
+  filter(morph != "p.bushy")
+KM_survivalanalysis_BLUE <- KM_survivalanalysis %>%
+  filter(site == "BLUE")
+
+
+km <- with(KM_survivalanalysis_BLUE, Surv(time, status))
+head(km,80)
+##fit the data
+km_fit <- survfit(Surv(time, status) ~ 1, data=KM_survivalanalysis_BLUE)
+summary(km_fit, times = c(1,58,80,94,100,123,149*(1:10)))
+##basic plot
+#autoplot(km_fit)
+
+km_trt_fit <- survfit(Surv(days, status) ~ treatment, data=KM_survivalanalysis_BLUE)
+summary(km_trt_fit, times = c(1,58,80,94,100,123,149*(1:10)))
+#autoplot(km_trt_fit)
+
+
+###plots
+library(survminer)
+library(survival)
+ggsurvplot(km_trt_fit, data = KM_survivalanalysis_BLUE)
+
+
+theme <- theme(axis.line = element_line(colour = "black"),
+           panel.grid.major = element_line(colour = "white"),
+           panel.grid.minor = element_line(colour = "white"),
+           panel.border = element_blank(),
+           panel.background = element_blank())
+
+
+ggsurv_alone <- ggsurvplot(km_trt_fit, data = KM_survivalanalysis_BLUE,
+ surv.median.line = "hv", # Add medians survival
+ ncensor.plot = FALSE,
+ risk.table = FALSE,
+ legend.title = "Site",
+ #legend.labs = c("DEEP", "CONTROL","SHADED","SHADE-DEEP"),
+#  palette = c("#ff6600","#669999","#4d79ff","#cc0066"),
+ # Add p-value and intervals
+ pval = TRUE,
+ title = "BLUE",
+ xlim = c(0,150),
+ xlab = "Time (Days)",
+ ylab = "Survival Probability",# customize X axis label.
+           break.time.by = 10, 
+ ylim = c(0.4,1),
+ conf.int = TRUE,
+ tables.height = 0.4,
+# tables.theme = theme_cleantable(),
+# ggtheme = theme_bw(),
+ tables.theme = theme,
+ ggtheme = theme
+)
+ggsurv_alone
+```
+
+```{r, Fig S5d - KM curves within sites between treatments BLUE for T0-T6 inclusinve}
+KM_survivalanalysis <- read_csv("/Users/154800/Library/CloudStorage/OneDrive-UTS/2. Shading Nurseries/km_survivalanalysis.csv")
+# Filter the data - remove p.bushy
+KM_survivalanalysis <- KM_survivalanalysis %>%
+  filter(morph != "p.bushy")
+KM_survivalanalysis_BLUE <- KM_survivalanalysis %>%
+  filter(site == "BLUE")
+
+
+km <- with(KM_survivalanalysis_BLUE, Surv(time, status))
+head(km,80)
+##fit the data
+km_fit <- survfit(Surv(time, status) ~ 1, data=KM_survivalanalysis_BLUE)
+summary(km_fit, times = c(1,58,80,94,100,123,149*(1:10)))
+##basic plot
+#autoplot(km_fit)
+
+km_trt_fit <- survfit(Surv(days, status) ~ treatment, data=KM_survivalanalysis_BLUE)
+summary(km_trt_fit, times = c(1,58,80,94,100,123,149*(1:10)))
+#autoplot(km_trt_fit)
+
+
+###plots
+library(survminer)
+library(survival)
+ggsurvplot(km_trt_fit, data = KM_survivalanalysis_BLUE)
+
+
+theme <- theme(axis.line = element_line(colour = "black"),
+           panel.grid.major = element_line(colour = "white"),
+           panel.grid.minor = element_line(colour = "white"),
+           panel.border = element_blank(),
+           panel.background = element_blank())
+ggsurv_alone <- ggsurvplot(km_trt_fit, data = KM_survivalanalysis_BLUE,
+ surv.median.line = "hv", # Add medians survival
+ ncensor.plot = FALSE,
+ risk.table = FALSE,
+ legend.title = "Site",
+ #legend.labs = c("DEEP", "CONTROL","SHADED","SHADE-DEEP"),
+#  palette = c("#ff6600","#669999","#4d79ff","#cc0066"),
+ # Add p-value and intervals
+ pval = TRUE,
+ title = "BLUE",
+ xlim = c(0,150),
+ xlab = "Time (Days)",
+ ylab = "Survival Probability",# customize X axis label.
+           break.time.by = 10, 
+ ylim = c(0.4,1),
+ conf.int = TRUE,
+ tables.height = 0.4,
+# tables.theme = theme_cleantable(),
+# ggtheme = theme_bw(),
+ tables.theme = theme,
+ ggtheme = theme
+)
+ggsurv_alone
+```
+
+```{r, Supplementary Data Sheet 2 stats log rank test of survival curves BLUE}
+res1_BLUE <- survdiff(Surv(time, status) ~ treatment ,
+     data = KM_survivalanalysis_BLUE)
+res1_BLUE
+##if null hypoth is rejected from above results - can go on to do pairwise comp
+res1_BLUE <- pairwise_survdiff(Surv(days, status) ~ treatment , p.adjust.method = "BH",
+     data = KM_survivalanalysis_BLUE)
+res1_BLUE
+```
+
+```{r, Fig S5c - KM curves within sites between treatments LONG,T3-T6 only}
+KM_survivalanalysis <- read_csv("/Users/154800/Library/CloudStorage/OneDrive-UTS/2. Shading Nurseries/km_survivalanalysis_T3.csv")
+# Filter the data - remove p.bushy
+KM_survivalanalysis <- KM_survivalanalysis %>%
+  filter(morph != "p.bushy")
+KM_survivalanalysis_LONG <- KM_survivalanalysis %>%
+  filter(site == "LONG")
+
+
+km <- with(KM_survivalanalysis_LONG, Surv(days, status))
+head(km,80)
+##fit the data
+km_fit <- survfit(Surv(days, status) ~ 1, data=KM_survivalanalysis_LONG)
+summary(km_fit, times = c(94,100,123,149*(1:10)))
+##basic plot
+#autoplot(km_fit)
+
+km_trt_fit <- survfit(Surv(days, status) ~ treatment, data=KM_survivalanalysis_LONG)
+summary(km_trt_fit, times = c(94,100,123,149*(1:10)))
+#autoplot(km_trt_fit)
+
+
+###plots
+library(survminer)
+library(survival)
+ggsurvplot(km_trt_fit, data = KM_survivalanalysis_LONG)
+
+
+theme <- theme(axis.line = element_line(colour = "black"),
+           panel.grid.major = element_line(colour = "white"),
+           panel.grid.minor = element_line(colour = "white"),
+           panel.border = element_blank(),
+           panel.background = element_blank())
+
+ggsurv_alone <- ggsurvplot(km_trt_fit, data = KM_survivalanalysis_LONG,
+ surv.median.line = "hv", # Add medians survival
+ ncensor.plot = FALSE,
+ risk.table = FALSE,
+ legend.title = "Site",
+ #legend.labs = c("DEEP", "CONTROL","SHADED","SHADE-DEEP"),
+  #palette = c("#ff6600","#669999","#4d79ff","#cc0066"),
+ # Add p-value and intervals
+ pval = TRUE,
+ title = "LONG",
+ xlim = c(90,150),
+ xlab = "Time (Days)",
+ ylab = "Survival Probability",# customize X axis label.
+           break.time.by = 10, 
+ ylim = c(0.4,1),
+ conf.int = TRUE,
+ tables.height = 0.4,
+# tables.theme = theme_cleantable(),
+# ggtheme = theme_bw(),
+ tables.theme = theme,
+ ggtheme = theme
+)
+ggsurv_alone
+```
+
+```{r, Fig S5e - KM curves within sites between treatments LONG, T0 only}
+KM_survivalanalysis <- read_csv("/Users/154800/Library/CloudStorage/OneDrive-UTS/2. Shading Nurseries/km_survivalanalysis.csv")
+KM_survivalanalysis <- KM_survivalanalysis %>%
+  filter(morph != "p.bushy")
+KM_survivalanalysis_LONG <- KM_survivalanalysis %>%
+  filter(site == "LONG")
+
+km <- with(KM_survivalanalysis_LONG, Surv(days, status))
+head(km,80)
+
+km_trt_fit <- survfit(Surv(days, status) ~ treatment, data=KM_survivalanalysis_LONG)
+summary(km_trt_fit, times = c(1,58,80,94,100,123,149*(1:10)))
+#autoplot(km_trt_fit)
+
+###plots
+library(survminer)
+library(survival)
+ggsurvplot(km_trt_fit, data = KM_survivalanalysis_LONG)
+
+
+theme <- theme(axis.line = element_line(colour = "black"),
+           panel.grid.major = element_line(colour = "white"),
+           panel.grid.minor = element_line(colour = "white"),
+           panel.border = element_blank(),
+           panel.background = element_blank())
+ggsurv_alone <- ggsurvplot(km_trt_fit, data = KM_survivalanalysis_LONG,
+ surv.median.line = "hv", # Add medians survival
+ ncensor.plot = FALSE,
+ risk.table = FALSE,
+ legend.title = "Site",
+ #legend.labs = c("DEEP", "CONTROL","SHADED","SHADE-DEEP"),
+  #palette = c("#ff6600","#669999","#4d79ff","#cc0066"),
+ # Add p-value and intervals
+ pval = TRUE,
+ title = "LONG",
+ xlim = c(0,150),
+ xlab = "Time (Days)",
+ ylab = "Survival Probability",# customize X axis label.
+           break.time.by = 10, 
+ ylim = c(0.4,1),
+ conf.int = TRUE,
+ tables.height = 0.4,
+# tables.theme = theme_cleantable(),
+# ggtheme = theme_bw(),
+ tables.theme = theme,
+ ggtheme = theme
+)
+ggsurv_alone
+```
+
+```{r, Supplementary Data Sheet 2 stats log rank test of survival curves LONG}
+res1_LONG <- survdiff(Surv(time, status) ~ treatment ,
+     data = KM_survivalanalysis_LONG)
+res1_LONG
+##if null hypoth is rejected from above results - can go on to do pairwise comp
+res1_LONG <- pairwise_survdiff(Surv(days, status) ~ treatment , p.adjust.method = "BH",
+     data = KM_survivalanalysis_LONG)
+res1_LONG
+```
+
+##Environmental Data Analysis
+
+```{r, load data and plot prelim visualisation}
+# Load necessary libraries
+library(tidyverse)
+library(dplyr)
+# Read the CSV file
+Temp_Light_Long_Format <- read_csv("Temp-Light Long Format.csv")
+# Adjust Light values based on differences in average across loggers at the start of the experiment
+Temp_Light_Long_Format_adj <- Temp_Light_Long_Format %>%
+  mutate(
+    Light = case_when(
+      site == "Long" & treatment == "Control" & Light > 0 ~ if_else(Light + 687.737 > 0, Light + 687.737, Light),
+      site == "Long" & treatment == "Deep" & Light > 0 ~ if_else(Light - 73.7415 > 0, Light - 73.7415, Light),
+      site == "Long" & treatment == "Shade+Deep" & Light > 0 ~ if_else(Light - 1101.48 > 0, Light - 1101.48, Light),
+      site == "Long" & treatment == "Shaded" & Light > 0 ~ if_else(Light + 487.48 > 0, Light + 487.48, Light),
+      site == "Blue" & treatment == "Control" & Light > 0 ~ if_else(Light + 869.4134 > 0, Light + 869.4134, Light),
+      site == "Blue" & treatment == "Deep" & Light > 0 ~ if_else(Light - 1583.2 > 0, Light - 1583.2, Light),
+      site == "Blue" & treatment == "Shade+Deep" & Light > 0 ~ if_else(Light + 1048.141 > 0, Light + 1048.141, Light),
+      site == "Blue" & treatment == "Shaded" & Light > 0 ~ if_else(Light - 334.355 > 0, Light - 334.355, Light),
+      TRUE ~ Light
+    )
+  )
+
+library(dplyr)
+##Filter is only required for the light, ensure whole temperature dataset is used
+Temp_Light_Long_Format_filter <- Temp_Light_Long_Format_adj %>%
+  filter(day %in% c(2,3,4,60,61,62,63,82,83,84,85,96,97,98,99,102,103,104,105,125,126,127,128) & Light <= 140000)
+# Create the new PAR column
+Temp_Light_Long_Format_filter <- Temp_Light_Long_Format_filter %>%
+  mutate(PAR = ifelse(Light > 0, Light * 0.0185, 0))
+# Remove rows where Light is greater than 14,000
+#Temp_Light_Long_Format <- Temp_Light_Long_Format %>%
+  #filter(Light <= 140000 & day >= 1 & day <= 150)
+
+Temp_Light_Long_Format <- Temp_Light_Long_Format %>%
+  filter(day %in% c(2,3,4,60,61,62,63,82,83,84,85,96,97,98,99,102,103,104,105,125,126,127,128) & Light <= 140000)
+ # filter(Light <= 14,000 & day >= 79 & day <= 108)
+# Convert Date column to Date type if needed (assuming there's a Date column)
+#Temp_Light_Long_Format$Date <- as.Date(Temp_Light_Long_Format$date, format = "%d-%b-%y")
+
+# Summarise temperature and light by site and treatment for each day
+summary_temp_light <- Temp_Light_Long_Format %>%
+  group_by(day, site, treatment) %>%
+  summarise(
+    Avg_Temp_C = mean(Temp, na.rm = TRUE),
+    Avg_Light = mean(Light, na.rm = TRUE)
+  )
+```
+
+```{r, Supplementary Data Sheet 6. Check normality and test light/temp differences between sites x treatment}
+daily_summary <- Temp_Light_Long_Format %>%
+  group_by(day, site, treatment) %>%
+  summarise(
+    Avg_Temp_C = mean(Temp, na.rm = TRUE),
+    Avg_Light = mean(Light, na.rm = TRUE),
+    Max_Temp_C = max(Temp, na.rm = TRUE),
+    Max_Light = max(Light, na.rm = TRUE),
+    Min_Temp_C = min(Temp, na.rm = TRUE),
+    Min_Light = min(Light, na.rm = TRUE)
+  )
+
+site_summary <- Temp_Light_Long_Format %>%
+  group_by(site) %>%
+  summarise(
+    Avg_Temp_C = mean(Temp, na.rm = TRUE),
+    Avg_Light = mean(Light, na.rm = TRUE),
+    Max_Temp_C = max(Temp, na.rm = TRUE),
+    Max_Light = max(Light, na.rm = TRUE),
+    Min_Temp_C = min(Temp, na.rm = TRUE),
+    Min_Light = min(Light, na.rm = TRUE)
+  )
+treatment_summary <- Temp_Light_Long_Format %>%
+  group_by(site) %>%
+  summarise(
+    Avg_Temp_C = mean(Temp, na.rm = TRUE),
+    Avg_Light = mean(Light, na.rm = TRUE),
+    Max_Temp_C = max(Temp, na.rm = TRUE),
+    Max_Light = max(Light, na.rm = TRUE),
+    Min_Temp_C = min(Temp, na.rm = TRUE),
+    Min_Light = min(Light, na.rm = TRUE)
+  )
+
+#check nrmailty
+#model  <- lm(Avg_Temp_C ~ site*treatment, data = daily_summary)
+#ggqqplot(residuals(model))
+#ggsave("plots/qqplots/Tissue_18_SQRT/Sulphur_elements_ngcm2.png", height = 3, width = 5)
+#shapiro_test(residuals(model))
+library(rstatix)
+##non-parametric all times between T0-T6
+daily_summary$site = as.factor(daily_summary$site)
+daily_summary$treatment = as.factor(daily_summary$treatment)
+daily_summarynaomit <- na.omit(daily_summary)
+daily_summaryallaov = art(Avg_Temp_C ~ site*treatment, data= daily_summary)
+anova(daily_summaryallaov)
+
+art.con(daily_summaryallaov, "site:treatment", adjust="holm") %>%  # run ART-C for X1 × X2
+		  summary() %>%  # add significance stars to the output
+		  mutate(sig. = symnum(p.value, corr=FALSE, na=FALSE,
+		                       cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1),
+		                       symbols = c("***", "**", "*", ".", " ")))
+
+##non-parametric T3-T6 only
+# Subset daily_summary to include rows where day value is between 90 and 150
+daily_summary <- daily_summary %>% 
+  filter(day >= 90 & day <= 150)
+daily_summary$site = as.factor(daily_summary$site)
+daily_summary$treatment = as.factor(daily_summary$treatment)
+daily_summarynaomit <- na.omit(daily_summary)
+daily_summaryallaov = art(Avg_Temp_C ~ site*treatment, data= daily_summary)
+anova(daily_summaryallaov)
+
+art.con(daily_summaryallaov, "site:treatment", adjust="holm") %>%  # run ART-C for X1 × X2
+		  summary() %>%  # add significance stars to the output
+		  mutate(sig. = symnum(p.value, corr=FALSE, na=FALSE,
+		                       cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1),
+		                       symbols = c("***", "**", "*", ".", " ")))
+
+
+
+```
+
+```{r, Fig S3 b-c - plot and stats for TEMP between sites and treatments for T3-6 only}
+# Read the CSV file
+Temp_Light_Long_Format <- read_csv("Temp-Light Long Format.csv")
+daily_summary <- Temp_Light_Long_Format %>%
+  group_by(day, site, treatment) %>%
+  summarise(
+    Avg_Temp_C = mean(Temp, na.rm = TRUE),
+    Avg_Light = mean(Light, na.rm = TRUE),
+    Max_Temp_C = max(Temp, na.rm = TRUE),
+    Max_Light = max(Light, na.rm = TRUE),
+    Min_Temp_C = min(Temp, na.rm = TRUE),
+    Min_Light = min(Light, na.rm = TRUE)
+  )
+daily_summary$site_treatment <- paste(daily_summary$site, daily_summary$treatment, sep = "_")
+
+# Subset daily_summary to include rows where day value is between 90 and 150
+daily_summary <- daily_summary %>% 
+  filter(day >= 90 & day <= 150)
+
+##non-parametric TEMP
+daily_summary$site = as.factor(daily_summary$site)
+daily_summary$treatment = as.factor(daily_summary$treatment)
+daily_summarynaomit <- na.omit(daily_summary)
+daily_summaryallaov = art(Avg_Temp_C ~ site*treatment, data= daily_summarynaomit)
+anova(daily_summaryallaov)
+
+art.con(daily_summaryallaov, "site:treatment", adjust="holm") %>%  # run ART-C for X1 × X2
+		  summary() %>%  # add significance stars to the output
+		  mutate(sig. = symnum(p.value, corr=FALSE, na=FALSE,
+		                       cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1),
+		                       symbols = c("***", "**", "*", ".", " ")))
+
+
+
+
+# Plotting Temperature by Site and Treatment
+temp_plot3 <- ggplot() +
+  geom_ribbon(data = daily_summary, aes(x = day, ymin = Min_Temp_C, ymax = Max_Temp_C, fill = treatment), alpha = 0.2) +
+  geom_line(data = daily_summary, aes(x = day, y = Avg_Temp_C, color = treatment)) +
+  facet_grid(site~.) +
+  labs(x = "day", y = "Temperature (°C)", title = "Temperature by Site Over Time") +
+  theme_minimal() +  # Remove background and grids
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.line = element_line(color = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()
+  ) +
+  scale_y_continuous(limits = c(26, 32))
+
+temp_plot3
+
+```
+
+```{r, analysis of differences in light T0-T6}
+library(dplyr)
+library(ggplot2)
+library(car)  # For leveneTest
+library(ARTool)  # For ART-C
+# Ensure 'site' and 'treatment' are factors
+Temp_Light_Long_Format$site <- as.factor(Temp_Light_Long_Format$site)
+Temp_Light_Long_Format$treatment <- as.factor(Temp_Light_Long_Format$treatment)
+# Summarize temperature and light by site, treatment, and day
+daily_summary <- Temp_Light_Long_Format_filter %>%
+  group_by(day, site, treatment) %>%
+  summarise(
+    Avg_Temp_C = mean(Temp, na.rm = TRUE),
+    Avg_Light = mean(Light, na.rm = TRUE),
+    Max_Temp_C = max(Temp, na.rm = TRUE),
+    Max_Light = max(Light, na.rm = TRUE),
+    Min_Temp_C = min(Temp, na.rm = TRUE),
+    Min_Light = min(Light, na.rm = TRUE)
+  )
+
+# Convert 'site' and 'treatment' to factors in daily_summary
+daily_summary$site <- as.factor(daily_summary$site)
+daily_summary$treatment <- as.factor(daily_summary$treatment)
+# Levene's Test for homogeneity of variances for site 
+leveneTest(Avg_Light ~ interaction(treatment), data = daily_summary)
+# Remove NA values
+daily_summary_naomit <- na.omit(daily_summary)
+# Perform ANOVA with aligned rank transform (ART) for site 'LONG'
+daily_summary_allaov <- art(Avg_Light ~ treatment * site, data = daily_summary_naomit)
+anova(daily_summary_allaov)
+# Post-hoc test for interaction for site 'LONG'
+art.con(daily_summary_allaov, "treatment:site", adjust = "holm") %>%
+  summary() %>%
+  mutate(sig. = symnum(p.value, corr = FALSE, na = FALSE,
+                       cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1),
+                       symbols = c("***", "**", "*", ".", " ")))
+
+
+
+
+```
+
+```{r, analysis of differences in light T3-T6}
+library(dplyr)
+library(ggplot2)
+library(car)  # For leveneTest
+library(ARTool)  # For ART-C
+# Ensure 'site' and 'treatment' are factors
+Temp_Light_Long_Format$site <- as.factor(Temp_Light_Long_Format$site)
+Temp_Light_Long_Format$treatment <- as.factor(Temp_Light_Long_Format$treatment)
+# Summarize temperature and light by site, treatment, and day
+daily_summary <- Temp_Light_Long_Format_filter %>%
+  group_by(day, site, treatment) %>%
+  summarise(
+    Avg_Temp_C = mean(Temp, na.rm = TRUE),
+    Avg_Light = mean(Light, na.rm = TRUE),
+    Max_Temp_C = max(Temp, na.rm = TRUE),
+    Max_Light = max(Light, na.rm = TRUE),
+    Min_Temp_C = min(Temp, na.rm = TRUE),
+    Min_Light = min(Light, na.rm = TRUE)
+  )
+# Subset daily_summary to include rows where day value is between 90 and 150
+daily_summary <- daily_summary %>% 
+  filter(day >= 90 & day <= 150)
+# Convert 'site' and 'treatment' to factors in daily_summary
+daily_summary$site <- as.factor(daily_summary$site)
+daily_summary$treatment <- as.factor(daily_summary$treatment)
+# Levene's Test for homogeneity of variances for site 
+leveneTest(Avg_Light ~ interaction(treatment), data = daily_summary)
+# Remove NA values
+daily_summary_naomit <- na.omit(daily_summary)
+# Perform ANOVA with aligned rank transform (ART) for site 'LONG'
+daily_summary_allaov <- art(Avg_Light ~ treatment * site, data = daily_summary_naomit)
+anova(daily_summary_allaov)
+# Post-hoc test for interaction for site 'LONG'
+art.con(daily_summary_allaov, "treatment:site", adjust = "holm") %>%
+  summary() %>%
+  mutate(sig. = symnum(p.value, corr = FALSE, na = FALSE,
+                       cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1),
+                       symbols = c("***", "**", "*", ".", " ")))
+```
+
+```{r, Fig S4a - bar plot by Light (LUX) by treatment and site}
+
+library(dplyr)
+library(ggplot2)
+
+# Define standard error function
+std <- function(x) sd(x) / sqrt(length(x))
+
+# Group by treatment and site, then calculate the mean and standard error across all time points
+data_plot_bar <- Temp_Light_Long_Format_adj %>%
+  group_by(treatment, site) %>%
+  summarise(
+    Avg = mean(Light, na.rm = TRUE),
+    SEM = std(Light)
+  )
+
+# Plot the bar graph
+treat_plot_bar <- ggplot(data_plot_bar, aes(x = treatment, y = Avg, fill = site)) +
+  geom_bar(stat = "identity", position = position_dodge(), color = "black", size = 0.5) +
+  geom_errorbar(aes(ymin = Avg - SEM, ymax = Avg + SEM), 
+                position = position_dodge(0.9), width = 0.25, color = "black") +
+  labs(x = "Treatment", y = "Light (lux)", fill = "Site") +
+  theme_minimal() +
+  #scale_fill_manual(values = c("CONTROL" = "grey50", "DEEP" = "dodgerblue3", "SHADE-DEEP" = "green3", "SHADED" = "orangered3")) +
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", size = 1, fill = NA),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black")
+  )
+
+treat_plot_bar
+
+```
+
+```{r, Fig S4 b - plot midday PAR levels}
+library(dplyr)
+library(ggplot2)
+# Define standard error function
+std <- function(x) sd(x) / sqrt(length(x))
+# Define the times to filter
+filter_times_am <- c("11:30:00", "11:40:00", "11:50:00")
+filter_times_pm <- c("12:00:00", "12:10:00", "12:20:00", "12:30:00")
+# Filter the dataframe to include only the specified times
+PAR_midday_filter <- Temp_Light_Long_Format_filter %>%
+  filter((time %in% filter_times_am & `AM/PM` == "AM") |
+         (time %in% filter_times_pm & `AM/PM` == "PM")) %>%
+  filter(!is.na(PAR) & PAR > 0)
+# Group by day, treatment, and site, then calculate the mean and standard error for each day
+daily_summary <- PAR_midday_filter %>%
+  group_by(day, treatment, site) %>%
+  summarise(
+    Avg_Light = mean(PAR, na.rm = TRUE),
+    SEM_Light = std(PAR)
+  )
+# Group by day, treatment, and site, then calculate the mean and standard error for each day
+treatment_summary <- PAR_midday_filter %>%
+  group_by(treatment, site) %>%
+  summarise(
+    Avg_Light = mean(PAR, na.rm = TRUE),
+    SEM_Light = std(PAR)
+  )
+
+# Plot the bar graph for PAR
+treat_plot_bar <- ggplot(treatment_summary, aes(x = treatment, y = Avg_Light, fill = site)) +
+  geom_bar(stat = "identity", position = position_dodge(), color = "black", size = 0.5) +
+  geom_errorbar(aes(ymin = Avg_Light - SEM_Light, ymax = Avg_Light + SEM_Light), 
+                position = position_dodge(0.9), width = 0.25, color = "black") +
+  labs(x = "Treatment", y = "Light Midday Avg (PAR)", fill = "Site") +
+  theme_minimal() +
+  #scale_fill_manual(values = c("CONTROL" = "grey50", "DEEP" = "dodgerblue3", "SHADE-DEEP" = "green3", "SHADED" = "orangered3")) +
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", size = 1, fill = NA),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black")
+  )
+
+treat_plot_bar
+```
+
+```{r, Fig S4c - midday PAR barplot with max dot}
+library(dplyr)
+library(ggplot2)
+# Group by day, treatment, and site, then calculate the mean, SEM, and maximum PAR for each group
+treatment_summary <- PAR_midday_filter %>%
+  group_by(treatment, site) %>%
+  summarise(
+    Avg_Light = mean(PAR, na.rm = TRUE),
+    SEM_Light = sd(PAR, na.rm = TRUE) / sqrt(n()),  # Calculate SEM
+    Max_Light = max(PAR, na.rm = TRUE)
+  )
+
+# Plot the bar graph for PAR with colored points for Max_Light
+treat_plot_bar <- ggplot(treatment_summary, aes(x = treatment, y = Avg_Light, fill = site)) +
+  geom_bar(stat = "identity", position = position_dodge(), color = "black", size = 0.5) +
+  geom_errorbar(aes(ymin = Avg_Light - SEM_Light, ymax = Avg_Light + SEM_Light), 
+                position = position_dodge(0.9), width = 0.25, color = "black") +
+  geom_point(aes(y = Max_Light, color = site), 
+             position = position_dodge(0.9), 
+             size = 3, 
+             shape = 21, 
+             fill = "white") +  # Use white fill for the points
+  labs(x = "Treatment", y = "Light Midday Avg (PAR)", fill = "Site", color = "Site") +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", size = 1, fill = NA),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black")
+  )
+
+treat_plot_bar
+```
+
+##Remote sensing DHW data
+
+```{r, load data and plot prelim visualisation}
+
+# Load necessary libraries
+library(tidyverse)
+library(dplyr)
+
+# Read the CSV file
+Temp_Light_Long_Format <- read_csv("Agincourt_Remote.csv")
+
+# Summarise temperature and light by site and treatment for each day
+YYMM_temp <- Temp_Light_Long_Format %>%
+  group_by(YYYY, MM) %>%
+  summarise(
+    Avg_Temp_C = mean(SST_MAX, na.rm = TRUE)
+  )
+
+# Summarise temperature and light by site and treatment for each day
+YY_temp <- Temp_Light_Long_Format %>%
+  group_by(YYYY) %>%
+  summarise(
+    Avg_Temp_C = mean(SST_MAX, na.rm = TRUE)
+  )
+library(dplyr)
+library(ggplot2)
+
+# Define standard error function
+std <- function(x) sd(x) / sqrt(length(x))
+
+YY_maxDHW <- Temp_Light_Long_Format %>%
+  group_by(YYYY) %>%
+  summarise(
+    Max_DHW = max(DHW, na.rm = TRUE)
+  )
+
+# Group by treatment and site, then calculate the mean and standard error across all time points
+YY_plot_bar <- Temp_Light_Long_Format %>%
+  group_by(YYYY) %>%
+  summarise(
+    Avg_MAXSST = mean(SST_MAX, na.rm = TRUE),
+    SEM = std(SST_MAX)
+  )
+
+YY_plot_bar2 <- left_join(YY_maxDHW, YY_plot_bar, by = 'YYYY')
+
+```
+
+```{r, Fig 1c - Plot DHW at Agincourt Reef between 2014-2024}
+
+#filter years
+YY_subset <- YY_plot_bar2 %>% 
+  filter(YYYY >= 2014 & YYYY <= 2024)
+
+YY_plot14_24_bar <- ggplot(YY_subset, aes(x = YYYY, y = Max_DHW)) +
+  geom_bar(stat = "identity", position = position_dodge(), color = "black", size = 0.5) +
+  labs(x = "Treatment", y = "DHW") +
+  theme_minimal() +
+  # scale_fill_manual(values = c("orangered3")) +
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", size = 1, fill = NA),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black")
+  ) +
+  scale_x_continuous(breaks = seq(min(YY_subset$YYYY), max(YY_subset$YYYY), by = 1)) +
+  scale_y_continuous(breaks = seq(0, max(YY_subset$Max_DHW), by = 1))
+
+YY_plot14_24_bar
+
+
+```
